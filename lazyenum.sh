@@ -9,6 +9,11 @@ ADVISORY="Enumeration script for given set of ip.Use responsibly! Designed for l
 VHOSTS_TYPE="htb"       #Change accordingly for OSCP exam
 TMPDIR=$TARGET\\tmp
 OUTPUT=$TARGET
+WEB_WORDLIST="/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt"
+VHOST_WORDLIST="/usr/share/wordlists/Subdomain.txt"
+WEB_EXT_1="php,html,txt"
+WEB_EXT_2="swp,,pdf"
+WEB_EXT_3="tar.gz,bak,zip,sh"
 
 #####################################
 #-----------)Colours(---------------#
@@ -173,43 +178,116 @@ vhosts_enum(){
     elif [[ ! -z "$vhost" && -z "$VHOST_URL" ]]
     then
         #Run vhosts enum on $vhost
-        echo $vhost | parallel -j0 
+        gobuster vhost -w $VHOST_WORDLIST -u $vhost -q 1>$TMPDIR/vhost_$vhost.txt
+        for v in `cat $TMPDIR/vhost_$vhost.txt`
+        do
+            host=`echo $v | grep "\w*.$VHOSTS_TYPE"`
+            if [ $? -eq 0 ]
+            then
+                echo $host >> $OUTPUT/vhost.txt
+            fi
+        done
+
+        echo $LG"[INFO] Done with virtual hosts enunmeration!"
     elif [[ -z "$vhost" && ! -z "$VHOST_URL" ]]
     then
         #Run vhosts enum on $VHOSTS_URL
+        gobuster vhost -w $VHOST_WORDLIST -u $VHOST_URL -q 1>$TMPDIR/vhost_$VHOST_URL.txt
+        for v in `cat $TMPDIR/vhost_$VHOST_URL.txt`
+        do
+            host=`echo $v | grep "\w*.$VHOSTS_TYPE"`
+            if [ $? -eq 0 ]
+            then
+                echo $host >> $OUTPUT/vhost.txt
+            fi
+        done
+
+        echo $LG"[INFO] Done with virtual hosts enunmeration!"
     else
         # Run vhosts enum on $VHOSTS_URL and $vhosts
+        gobuster vhost -w $VHOST_WORDLIST -u $vhost -q 1>$TMPDIR/vhost_$vhost.txt
+        for v in `cat $TMPDIR/vhost_$VHOST_URL.txt`
+        do
+            host=`echo $v | grep "\w*.$VHOSTS_TYPE"`
+            if [ $? -eq 0 ]
+            then
+                echo $host >> $OUTPUT/vhost.txt
+            fi
+        done
+
+        gobuster vhost -w $VHOST_WORDLIST -u $VHOST_URL -q 1>$TMPDIR/vhost_$VHOST_URL.txt
+        for v in `cat $TMPDIR/vhost_$vhost.txt`
+        do
+            host=`echo $v | grep "\w*.$VHOSTS_TYPE"`
+            if [ $? -eq 0 ]
+            then
+                echo $host >> $OUTPUT/vhost.txt
+            fi
+        done
+
+        echo $LG"[INFO] Done with virtual hosts enunmeration!"
     fi
 }
 
 web_enum(){
+    echo -e $LG"[INFO] Starting website enumeration\n[INFO] Stage 1 enumeration initiated!"
 
+    #Stage 1 enumeration
+    for urls in `cat $OUTPUT/vhost.txt`
+    do
+        gobuster -w $WEB_WORDLIST dir -u $urls -x $WEB_EXT_1 -q 1>$TMPDIR/gobuster_stage_1.txt
+    done
+
+    for links in `cat $TMPDIR/gobuster_stage_1.txt`
+    do
+        l=`echo $links | grep -E ' /\w*.\w*'`
+        if [ -$? -eq 0 ]
+        then
+            echo $l >> $OUTPUT/gobuster.txt
+        fi
+    done
+
+    echo $LG"[INFO] Starting stage 2 enumeration!"
+    #Stage 2 enumeration
+    for urls in `cat $OUTPUT/vhost.txt`
+    do
+        gobuster -w $WEB_WORDLIST dir -u $urls -x $WEB_EXT_2 -q 1>$TMPDIR/gobuster_stage_2.txt
+    done
+
+    for links in `cat $TMPDIR/gobuster_stage_2.txt`
+    do
+        l=`echo $links | grep -E ' /\w*.\w*'`
+        if [ -$? -eq 0 ]
+        then
+            echo $l >> $OUTPUT/gobuster.txt
+        fi
+    done
+
+    echo $LG"[INFO] Starting stage 3 enumeration!"
+    #Stage 3 enumeration
+    for urls in `cat $OUTPUT/vhost.txt`
+    do
+        gobuster -w $WEB_WORDLIST dir -u $urls -x $WEB_EXT_3 -q 1>$TMPDIR/gobuster_stage_3.txt
+    done
+
+    for links in `cat $TMPDIR/gobuster_stage_3.txt`
+    do
+        l=`echo $links | grep -E ' /\w*.\w*'`
+        if [ -$? -eq 0 ]
+        then
+            echo $l >> $OUTPUT/gobuster.txt
+        fi
+    done
+
+    echo $LG"[INFO] Done with web based enumeration"
 }
 
 linkfinder_enum(){
+    echo $LG"[INFO] Starting static analysis of web pages"
+
 
 }
 
 exploitdb_enum(){
 
-
 }
-
-if [ "$#" ]
-target=$1
-
-unset 
-
-######################### nmap scan ###########################
-#Stage 1 : Top 1000 ports scan
-
-if [ "$#" -leq 0 ]
-then
-    help()
-    return 1
-done
-
-echo "[!]Starting nmap scan on top 1000 ports"
-nmap $target 1>/tmp/top_1000.txt
-
-echo "[!]Analyzing the open ports"

@@ -1,0 +1,2 @@
+# lazyenum
+Enumeration made easy
